@@ -29,7 +29,7 @@ import Base from '../layouts/Base.astro';
       };
 
       function render(list, query) {
-        if (!query) { results.innerHTML = ''; count.textContent = ''; return; }
+        if (query.length < 2) { results.innerHTML = ''; count.textContent = 'keep typing…'; return; }
         if (!list.length) { results.innerHTML = '<p style="color:var(--muted);padding:20px 0;">nothing yet for “' + esc(query) + '”.</p>'; count.textContent = ''; return; }
         count.textContent = list.length + (list.length === 1 ? ' result' : ' results');
         results.innerHTML = list.map(function (it) {
@@ -44,13 +44,29 @@ import Base from '../layouts/Base.astro';
       }
 
       function search(query) {
-        const t = query.trim().toLowerCase();
-        if (!t) return [];
-        return data.filter(function (it) {
-          return (it.title + ' ' + it.dek + ' ' + it.text + ' ' + it.type).toLowerCase().includes(t);
-        });
-      }
-
+  const words = query.trim().toLowerCase().split(/\s+/).filter(w => w.length >= 2);
+  if (!words.length) return [];
+  const scored = [];
+  for (const it of data) {
+    const title = (it.title || '').toLowerCase();
+    const dek = (it.dek || '').toLowerCase();
+    const text = (it.text || '').toLowerCase();
+    let score = 0, all = true;
+    for (const w of words) {
+      const re = new RegExp('\\b' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      let s = 0;
+      if (title.includes(w)) s += re.test(title) ? 10 : 5;
+      if (dek.includes(w)) s += re.test(dek) ? 4 : 2;
+      if (text.includes(w)) s += re.test(text) ? 2 : 1;
+      if (!s) { all = false; break; }
+      score += s;
+    }
+    if (all) scored.push({ it, score });
+  }
+  return scored
+    .sort((a, b) => b.score - a.score || (b.it.date || '').localeCompare(a.it.date || ''))
+    .map(x => x.it);
+}
       let timer;
       q.addEventListener('input', function () {
         clearTimeout(timer);
